@@ -1,94 +1,74 @@
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    classification_report,
-    roc_curve,
-    roc_auc_score,
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+url = "https://archive.ics.uci.edu/ml/machine-learning-databases/auto-mpg/auto-mpg.data"
+columns = [
+    "mpg", "cylinders", "displacement", "horsepower",
+    "weight", "acceleration", "model_year", "origin", "car_name"
+]
+
+df = pd.read_csv(
+    url,
+    names=columns,
+    delim_whitespace=True,
+    na_values="?"
 )
 
-cancer_dataset = load_breast_cancer()
-x_df = pd.DataFrame(cancer_dataset.data, columns=cancer_dataset.feature_names)
-y_series = pd.Series(cancer_dataset.target)
+df = df.drop(columns=["car_name"])
+df["horsepower"] = df["horsepower"].fillna(df["horsepower"].median())
 
-print("Dataset loaded successfully!")
-print("Dataset shape:", x_df.shape)
-print("\nFirst five records:")
-print(x_df.head())
-print("\nTarget classes:", cancer_dataset.target_names)
-print("0 = Malignant, 1 = Benign")
+df = pd.get_dummies(df, columns=["origin"], drop_first=True, dtype=int)
 
-x_train, x_test, y_train, y_test = train_test_split(
-    x_df,
-    y_series,
-    test_size=0.20,
-    random_state=42,
-    stratify=y_series,
+X = df.drop(columns=["mpg"])
+y = df["mpg"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
 )
 
-print("\nTraining samples:", x_train.shape[0])
-print("Testing samples:", x_test.shape[0])
+model = LinearRegression()
+model.fit(X_train, y_train)
 
-scaler_model = StandardScaler()
-x_train_scaled = scaler_model.fit_transform(x_train)
-x_test_scaled = scaler_model.transform(x_test)
+y_pred = model.predict(X_test)
 
-clf_model = LogisticRegression(max_iter=5000)
-clf_model.fit(x_train_scaled, y_train)
-print("\nLogistic Regression model trained successfully!")
+r2 = r2_score(y_test, y_pred)
+mae = mean_absolute_error(y_test, y_pred)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
 
-y_pred = clf_model.predict(x_test_scaled)
-y_prob = clf_model.predict_proba(x_test_scaled)[:, 1]
+print("Model Evaluation Metrics:")
+print(f"R-squared (R2) Score        : {r2:.4f}")
+print(f"Mean Absolute Error (MAE)    : {mae:.4f}")
+print(f"Root Mean Squared Error (RMSE): {rmse:.4f}")
 
-acc = accuracy_score(y_test, y_pred)
-print("\nModel Accuracy:", round(acc * 100, 2), "%")
+coefficients = pd.DataFrame({
+    "Feature": X.columns,
+    "Coefficient": model.coef_
+}).sort_values(by="Coefficient", ascending=False)
 
-cm = confusion_matrix(y_test, y_pred)
-print("\nConfusion Matrix:")
-print(cm)
+print("\nFeature Coefficients (Impact on MPG):")
+print(coefficients.to_string(index=False))
+print(f"\nIntercept: {model.intercept_:.4f}")
 
-plt.figure(figsize=(6, 4))
-sns.heatmap(
-    cm,
-    annot=True,
-    fmt="d",
-    cmap="Blues",
-    xticklabels=cancer_dataset.target_names,
-    yticklabels=cancer_dataset.target_names,
-)
-plt.xlabel("Predicted Class")
-plt.ylabel("Actual Class")
-plt.title("Confusion Matrix - Logistic Regression")
-plt.tight_layout()
-plt.show()
 
-print("\nClassification Report:")
-print(
-    classification_report(
-        y_test,
-        y_pred,
-        target_names=cancer_dataset.target_names,
-    )
-)
+#Model Evaluation Metrics:
+#R-squared (R2) Score        : 0.8449
+#Mean Absolute Error (MAE)    : 2.2882
+#Root Mean Squared Error (RMSE): 2.8877
 
-fpr, tpr, thresholds = roc_curve(y_test, y_prob)
-auc_score = roc_auc_score(y_test, y_prob)
+#Feature Coefficients (Impact on MPG):
+#     Feature  Coefficient
+#    origin_2     2.946907
+#    origin_3     2.671126
+#  model_year     0.825969
+#acceleration     0.067967
+#displacement     0.019776
+#      weight    -0.007047
+#  horsepower    -0.014562
+#   cylinders    -0.165664
 
-plt.figure(figsize=(7, 5))
-plt.plot(fpr, tpr, label=f"Logistic Regression (AUC = {auc_score:.3f})")
-plt.plot([0, 1], [0, 1], "k--", label="Random Classifier")
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
-plt.title("ROC Curve - Breast Cancer Classification")
-plt.legend(loc="lower right")
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-print("ROC-AUC Score:", round(auc_score, 4))
+#Intercept: -21.8577
